@@ -1,0 +1,27 @@
+{
+  "name": "nova-telegram-mini-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "vite --host 0.0.0.0",
+    "dev:api": "node --watch --disable-warning=ExperimentalWarning --env-file-if-exists=.env server/index.js",
+    "api": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env server/index.js",
+    "test:api": "node --test --disable-warning=ExperimentalWarning server/**/*.test.js",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "lucide-react": "latest",
+    "multer": "^2.2.0",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest",
+    "zod": "^4.0.17"
+  }
+}
