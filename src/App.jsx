@@ -373,13 +373,26 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [categoryId, setCategoryId] = useState(fallbackCategories[0]?.id ?? '');
   const [selectedProduct, setSelectedProduct] = useState(fallbackProducts[0]);
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => {
+    try {
+      const saved = localStorage.getItem('nova_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [comment, setComment] = useState('');
   const [toast, setToast] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [orderError, setOrderError] = useState('');
   const [createdOrderId, setCreatedOrderId] = useState(null);
   const [lastOrder, setLastOrder] = useState(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('nova_cart', JSON.stringify(cart));
+    } catch {}
+  }, [cart]);
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const titleMap = {

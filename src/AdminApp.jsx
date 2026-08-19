@@ -143,6 +143,7 @@ function ProductForm({ initial, categories, busy, onSave, onClose }) {
     ...initial,
     variants: initial.variants.map((variant) => ({ ...variant })),
   } : { ...emptyProduct, categoryId: categories[0]?.id ?? '', variants: [emptyVariant()] });
+  const [deletedVariantIds, setDeletedVariantIds] = useState([]);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(initial?.imageUrl ?? '');
   const [imageError, setImageError] = useState('');
@@ -151,7 +152,13 @@ function ProductForm({ initial, categories, busy, onSave, onClose }) {
     ...current,
     variants: current.variants.map((variant, variantIndex) => variantIndex === index ? { ...variant, ...patch } : variant),
   }));
-  const removeVariant = (index) => setForm((current) => ({ ...current, variants: current.variants.filter((_, variantIndex) => variantIndex !== index) }));
+  const removeVariant = (index) => {
+    const target = form.variants[index];
+    if (target?.id) {
+      setDeletedVariantIds((current) => [...current, target.id]);
+    }
+    setForm((current) => ({ ...current, variants: current.variants.filter((_, variantIndex) => variantIndex !== index) }));
+  };
   const chooseImage = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -183,7 +190,7 @@ function ProductForm({ initial, categories, busy, onSave, onClose }) {
 
   return (
     <Sheet title={initial ? 'Редактировать товар' : 'Новый товар'} subtitle="Карточка товара" onClose={onClose}>
-      <form className="admin-form" onSubmit={(event) => { event.preventDefault(); onSave({ ...form, imageFile, removeImage }); }}>
+      <form className="admin-form" onSubmit={(event) => { event.preventDefault(); onSave({ ...form, imageFile, removeImage, deletedVariantIds }); }}>
         <Field label="Категория *"><select value={form.categoryId} onChange={(event) => setForm({ ...form, categoryId: event.target.value })} required>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></Field>
         <Field label="Название *"><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></Field>
         <Field label="Короткая подпись"><input value={form.caption} onChange={(event) => setForm({ ...form, caption: event.target.value })} placeholder="Показывается в карточке" /></Field>
@@ -221,7 +228,7 @@ function ProductForm({ initial, categories, busy, onSave, onClose }) {
                 <Field label="Остаток (шт.)"><input type="number" min="0" inputMode="numeric" value={variant.stock} onChange={(event) => updateVariant(index, { stock: Number(event.target.value) })} /></Field>
               </div>
               <label className="admin-switch compact"><input type="checkbox" checked={variant.active} onChange={(event) => updateVariant(index, { active: event.target.checked })} /><span /><b>Доступен для заказа</b></label>
-              {!variant.id && form.variants.length > 1 && <button className="admin-remove-variant" type="button" onClick={() => removeVariant(index)}><Trash2 size={16} /> Удалить вариант</button>}
+              {form.variants.length > 1 && <button className="admin-remove-variant" type="button" onClick={() => removeVariant(index)}><Trash2 size={16} /> Удалить вариант</button>}
             </fieldset>
           ))}
         </div>
@@ -405,7 +412,7 @@ export default function AdminApp() {
   );
 
   const saveProduct = (form) => mutate(async () => {
-    const { variants, imageFile, removeImage, ...productFields } = form;
+    const { variants, imageFile, removeImage, deletedVariantIds, ...productFields } = form;
     const previousImageUrl = editor.item?.imageUrl ?? '';
     let uploadedImageUrl = '';
     try {
@@ -423,6 +430,9 @@ export default function AdminApp() {
         await api('/admin/products', token, { method: 'POST', body: JSON.stringify({ ...productFields, variants }) });
       } else {
         await api(`/admin/products/${editor.item.id}`, token, { method: 'PATCH', body: JSON.stringify(productFields) });
+        if (deletedVariantIds?.length) {
+          await Promise.all(deletedVariantIds.map((id) => api(`/admin/variants/${id}`, token, { method: 'DELETE' })));
+        }
         await Promise.all(variants.map((variant) => variant.id
           ? api(`/admin/variants/${variant.id}`, token, {
             method: 'PATCH', body: JSON.stringify({ name: variant.name, stock: variant.stock, active: variant.active }),
