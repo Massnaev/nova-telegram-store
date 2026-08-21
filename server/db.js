@@ -1,8 +1,26 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
 import { catalogSeed } from './catalog-seed.js';
+
+const require = createRequire(import.meta.url);
+
+function loadSqliteDriver() {
+  try {
+    const sqliteModule = require('node:sqlite');
+    if (sqliteModule?.DatabaseSync) return sqliteModule.DatabaseSync;
+  } catch {}
+
+  try {
+    const BetterSqlite3 = require('better-sqlite3');
+    if (BetterSqlite3) return BetterSqlite3;
+  } catch {}
+
+  throw new Error('SQLite driver not found. Please run on Node.js 22+ or install better-sqlite3.');
+}
+
+const DatabaseDriver = loadSqliteDriver();
 
 const serverDir = dirname(fileURLToPath(import.meta.url));
 export const defaultDatabasePath = resolve(serverDir, '..', 'data', 'nova.sqlite');
@@ -94,7 +112,6 @@ function runMigrations(db) {
     admin_username: '',
   };
 
-  const getSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
 
   for (const [key, value] of Object.entries(defaultSettings)) {
@@ -142,7 +159,7 @@ function seedDatabase(db) {
 
 export function createDatabase(databasePath = defaultDatabasePath) {
   if (databasePath !== ':memory:') mkdirSync(dirname(databasePath), { recursive: true });
-  const db = new DatabaseSync(databasePath);
+  const db = new DatabaseDriver(databasePath);
   db.exec('PRAGMA foreign_keys = ON;');
   if (databasePath !== ':memory:') db.exec('PRAGMA journal_mode = WAL;');
   db.exec(schema);
