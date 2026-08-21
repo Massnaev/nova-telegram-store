@@ -97,6 +97,9 @@ export function startBotPolling({ botToken, adminIds, getStoreInfo, appUrl = '' 
   console.log('🤖 Telegram bot polling started.');
 
   async function poll() {
+    try {
+      await fetch(`https://api.telegram.org/bot${botToken}/deleteWebhook?drop_pending_updates=false`);
+    } catch {}
     while (isRunning) {
       try {
         const response = await fetch(
@@ -123,47 +126,52 @@ export function startBotPolling({ botToken, adminIds, getStoreInfo, appUrl = '' 
   }
 
   async function handleMessage(msg) {
-    const chatId = msg.chat?.id;
-    const text = msg.text?.trim() || '';
-    const cleanAdminIds = adminIds.map((id) => String(id).trim().replace(/["']/g, ''));
-    const isAdmin = cleanAdminIds.includes(userId);
+    try {
+      const chatId = msg.chat?.id;
+      const text = msg.text?.trim() || '';
+      const userId = String(msg.from?.id || '');
+      const cleanAdminIds = adminIds.map((id) => String(id).trim().replace(/["']/g, ''));
+      const isAdmin = userId && cleanAdminIds.includes(userId);
 
-    if (!chatId) return;
+      if (!chatId) return;
 
-    const store = (typeof getStoreInfo === 'function' ? getStoreInfo() : null) || {
-      store_name: 'NOVA Market',
-      store_tagline: 'Качественные товары с удобным заказом.',
-    };
+      const store = (typeof getStoreInfo === 'function' ? getStoreInfo() : null) || {
+        store_name: 'NOVA Market',
+        store_tagline: 'Качественные товары с удобным заказом.',
+      };
 
-    if (text.startsWith('/start') || text.startsWith('/admin') || text.startsWith('/help')) {
-      if (isAdmin) {
-        const adminButtons = [];
-        if (appUrl) {
-          adminButtons.push([{ text: '⚙️ Открыть Админ-панель', web_app: { url: `${appUrl}/#admin` } }]);
-          adminButtons.push([{ text: '🛍 Открыть витрину магазина', web_app: { url: appUrl } }]);
+      if (text.startsWith('/start') || text.startsWith('/admin') || text.startsWith('/help')) {
+        if (isAdmin) {
+          const adminButtons = [];
+          if (appUrl) {
+            adminButtons.push([{ text: '⚙️ Открыть Админ-панель', web_app: { url: `${appUrl}/#admin` } }]);
+            adminButtons.push([{ text: '🛍 Открыть витрину магазина', web_app: { url: appUrl } }]);
+          }
+
+          const reply = `👑 <b>Панель администратора — ${escapeHtml(store.store_name)}</b>\n\n` +
+            `Здравствуйте, <b>${escapeHtml(msg.from?.first_name || 'Администратор')}</b>!\n` +
+            `Вы авторизованы по вашему Telegram ID (<code>${userId}</code>).\n\n` +
+            `Вам доступно управление товарами, фотографиями, остатками и заказами.\n` +
+            `Откройте меню или Mini App в боте для доступа к панели.`;
+
+          await sendTelegramMessage(botToken, chatId, reply, adminButtons.length > 0 ? { inline_keyboard: adminButtons } : null);
+        } else {
+          const clientButtons = [];
+          if (appUrl) {
+            clientButtons.push([{ text: '🛍 Открыть магазин', web_app: { url: appUrl } }]);
+          }
+
+          const reply = `👋 <b>Добро пожаловать в ${escapeHtml(store.store_name)}!</b>\n\n` +
+            `${escapeHtml(store.store_tagline || 'Качественные товары с быстрой доставкой.')}\n\n` +
+            `Нажмите кнопку <b>«Открыть магазин»</b> ниже или в меню чата, чтобы посмотреть каталог и оформить заказ 👇`;
+
+          await sendTelegramMessage(botToken, chatId, reply, clientButtons.length > 0 ? { inline_keyboard: clientButtons } : null);
         }
-
-        const reply = `👑 <b>Панель администратора — ${escapeHtml(store.store_name)}</b>\n\n` +
-          `Здравствуйте, <b>${escapeHtml(msg.from?.first_name || 'Администратор')}</b>!\n` +
-          `Вы авторизованы по вашему Telegram ID (<code>${userId}</code>).\n\n` +
-          `Вам доступно управление товарами, фотографиями, остатками и заказами.\n` +
-          `Откройте меню или Mini App в боте для доступа к панели.`;
-
-        await sendTelegramMessage(botToken, chatId, reply, adminButtons.length > 0 ? { inline_keyboard: adminButtons } : null);
-      } else {
-        const clientButtons = [];
-        if (appUrl) {
-          clientButtons.push([{ text: '🛍 Открыть магазин', web_app: { url: appUrl } }]);
-        }
-
-        const reply = `👋 <b>Добро пожаловать в ${escapeHtml(store.store_name)}!</b>\n\n` +
-          `${escapeHtml(store.store_tagline || 'Качественные товары с быстрой доставкой.')}\n\n` +
-          `Нажмите кнопку <b>«Открыть магазин»</b> ниже или в меню чата, чтобы посмотреть каталог и оформить заказ 👇`;
-
-        await sendTelegramMessage(botToken, chatId, reply, clientButtons.length > 0 ? { inline_keyboard: clientButtons } : null);
+      } else if (text === '/id') {
+        await sendTelegramMessage(botToken, chatId, `Ваш Telegram ID: <code>${userId}</code>\nСтатус: <b>${isAdmin ? 'Администратор 👑' : 'Покупатель 👤'}</b>`, null);
       }
-    } else if (text === '/id') {
-      await sendTelegramMessage(botToken, chatId, `Ваш Telegram ID: <code>${userId}</code>\nСтатус: <b>${isAdmin ? 'Администратор 👑' : 'Покупатель 👤'}</b>`, null);
+    } catch (msgErr) {
+      console.error('Error handling telegram message:', msgErr);
     }
   }
 
