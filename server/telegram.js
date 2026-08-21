@@ -52,11 +52,16 @@ export async function sendTelegramMessage(botToken, chatId, text, keyboard = nul
   }
 }
 
-export async function sendOrderToAdmins(order, botToken, adminIds) {
-  if (!botToken || !adminIds || adminIds.length === 0) {
-    console.warn('Telegram API credentials or admin IDs not set. Order notification skipped.');
-    return;
+export async function sendOrderToAdmins(botToken, adminIds, order) {
+  if (typeof botToken === 'object' && botToken?.items) {
+    const realOrder = botToken;
+    botToken = adminIds;
+    adminIds = order;
+    order = realOrder;
   }
+  if (!order || !order.items || !botToken || !adminIds) return;
+  const cleanAdminIds = (Array.isArray(adminIds) ? adminIds : [adminIds]).map((id) => String(id).trim().replace(/["']/g, '')).filter(Boolean);
+  if (cleanAdminIds.length === 0) return;
 
   const itemsList = order.items.map(item => 
     `• ${item.quantity}× <b>${escapeHtml(item.productName)}</b> (${escapeHtml(item.variantName)}) — ${item.lineTotal} руб.`
@@ -84,7 +89,7 @@ export async function sendOrderToAdmins(order, botToken, adminIds) {
     ]);
   }
 
-  for (const chatId of adminIds) {
+  for (const chatId of cleanAdminIds) {
     await sendTelegramMessage(botToken, chatId, message, inlineKeyboard.length > 0 ? { inline_keyboard: inlineKeyboard } : null);
   }
 }

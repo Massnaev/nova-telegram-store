@@ -360,11 +360,11 @@ export function createApp({
   app.use((_request, _response, next) => next(new ApiError('Маршрут не найден', 404, 'NOT_FOUND')));
   app.use((error, _request, response, _next) => {
     const status = error instanceof ApiError ? error.status : 500;
-    if (status >= 500) console.error(error);
+    if (status >= 500) console.error('API Server Error:', error);
     response.status(status).json({
       error: {
         code: error.code ?? 'INTERNAL_ERROR',
-        message: status >= 500 ? 'Внутренняя ошибка сервера' : error.message,
+        message: error.message || 'Внутренняя ошибка сервера',
         ...(error.details ? { details: error.details } : {}),
       },
     });
