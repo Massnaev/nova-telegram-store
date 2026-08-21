@@ -22,6 +22,7 @@
     "multer": "^2.2.0",
     "react": "latest",
     "react-dom": "latest",
+    "sql.js": "^1.14.2",
     "vite": "latest",
     "zod": "^4.0.17"
   }
