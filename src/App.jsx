@@ -10,6 +10,7 @@ import {
   Plus,
   Search,
   Send,
+  Shield,
   ShoppingBag,
   SlidersHorizontal,
   Sparkles,
@@ -46,7 +47,7 @@ function IconButton({ label, children, className = '', ...props }) {
   );
 }
 
-function AppHeader({ title, subtitle, canGoBack, onBack, cartCount, onCart, theme, onToggleTheme, brandName }) {
+function AppHeader({ title, subtitle, canGoBack, onBack, cartCount, onCart, theme, onToggleTheme, brandName, isAdmin, onGoToAdmin }) {
   return (
     <header className="app-header">
       <div className="header-side">
@@ -63,6 +64,11 @@ function AppHeader({ title, subtitle, canGoBack, onBack, cartCount, onCart, them
         {subtitle && <span>{subtitle}</span>}
       </div>
       <div className="header-side header-side-right" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {isAdmin && onGoToAdmin && (
+          <IconButton label="Панель администратора" onClick={onGoToAdmin} className="admin-header-btn" title="Панель администратора">
+            <Shield size={19} color="var(--blue)" />
+          </IconButton>
+        )}
         <IconButton label="Сменить тему" onClick={onToggleTheme} className="theme-toggle-btn">
           {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
         </IconButton>
@@ -351,9 +357,10 @@ function BottomNav({ screen, cartCount, onHome, onCatalog, onCart }) {
   );
 }
 
-export default function App() {
+export default function App({ onGoToAdmin }) {
   const [categories, setCategories] = useState(fallbackCategories);
   const [products, setProducts] = useState(fallbackProducts);
+  const [isAdmin, setIsAdmin] = useState(() => Boolean(localStorage.getItem('nova_admin_token')));
   const [settings, setSettings] = useState({
     store_name: 'NOVA Market',
     store_tagline: 'Большой выбор. Легко заказать.',
@@ -431,6 +438,26 @@ export default function App() {
   }, [theme]);
 
   const toggleTheme = () => setTheme((curr) => (curr === 'dark' ? 'light' : 'dark'));
+
+  useEffect(() => {
+    const initData = window.Telegram?.WebApp?.initData;
+    const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    if (initData || user?.id) {
+      fetch('/api/auth/telegram-admin', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ initData, telegramUserId: user?.id ? String(user.id) : undefined }),
+      })
+        .then((r) => r.json())
+        .then((res) => {
+          if (res.ok && res.isAdmin) {
+            setIsAdmin(true);
+            if (res.adminToken) localStorage.setItem('nova_admin_token', res.adminToken);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -561,6 +588,8 @@ export default function App() {
           theme={theme}
           onToggleTheme={toggleTheme}
           brandName={settings.store_name}
+          isAdmin={isAdmin}
+          onGoToAdmin={onGoToAdmin}
         />
         {renderScreen()}
         <BottomNav screen={screen} cartCount={cartCount} onHome={() => { setHistory([]); setScreen('home'); }} onCatalog={() => openCategory(categoryId)} onCart={() => go('cart')} />
@@ -569,4 +598,5 @@ export default function App() {
     </div>
   );
 }
+
 

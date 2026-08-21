@@ -19,6 +19,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  ShoppingBag,
   SlidersHorizontal,
   Sun,
   Trash2,
@@ -58,80 +59,58 @@ function Login({ onLogin, busy, error }) {
   return (
     <main className="admin-login">
       <section className="admin-login-card">
-        <div className="admin-logo"><LockKeyhole size={26} /></div>
-        <span className="admin-eyebrow">CONTROL PANEL</span>
-        <h1>Управление магазином</h1>
-        <p>Введите административный ключ. Он хранится только до закрытия этой вкладки.</p>
-        <form onSubmit={(event) => { event.preventDefault(); onLogin(token); }}>
-          <label className="admin-field">
-            <span>Ключ администратора</span>
+        <div className="admin-login-icon"><LockKeyhole size={28} /></div>
+        <h1>Панель управления</h1>
+        <p>Вход по ключу доступа администратора</p>
+        <form onSubmit={(event) => { event.preventDefault(); onLogin(token.trim()); }}>
+          <div className="admin-field">
             <div className="admin-password">
-              <input
-                type={visible ? 'text' : 'password'}
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                autoComplete="current-password"
-                required
-              />
-              <button type="button" onClick={() => setVisible((value) => !value)} aria-label={visible ? 'Скрыть ключ' : 'Показать ключ'}>
+              <input type={visible ? 'text' : 'password'} value={token} onChange={(e) => setToken(e.target.value)} placeholder="Введите ADMIN_TOKEN" required autoFocus />
+              <button type="button" onClick={() => setVisible((v) => !v)} aria-label={visible ? 'Скрыть' : 'Показать'}>
                 {visible ? <EyeOff size={19} /> : <Eye size={19} />}
               </button>
             </div>
-          </label>
-          {error && <div className="admin-inline-error" role="alert">{error}</div>}
+          </div>
+          {error && <div className="admin-login-error" role="alert">{error}</div>}
           <button className="admin-primary" type="submit" disabled={busy || !token.trim()}>
-            {busy ? <RefreshCw className="spin" size={19} /> : <LockKeyhole size={19} />}
-            {busy ? 'Проверяем…' : 'Войти'}
+            {busy ? 'Проверяем ключ…' : 'Войти в панель'}
           </button>
         </form>
-        <a href="./" className="admin-store-link">Открыть магазин <ExternalLink size={16} /></a>
       </section>
     </main>
   );
 }
 
-function Field({ label, children, hint }) {
-  return (
-    <label className="admin-field">
-      <span>{label}</span>
-      {children}
-      {hint && <small>{hint}</small>}
-    </label>
-  );
+function Field({ label, children }) {
+  return <label className="admin-field"><span>{label}</span>{children}</label>;
 }
 
 function Sheet({ title, subtitle, onClose, children }) {
-  useEffect(() => {
-    const onKeyDown = (event) => event.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
-
   return (
-    <div className="admin-sheet-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="admin-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-sheet-title">
-        <header>
-          <div><span>{subtitle}</span><h2 id="admin-sheet-title">{title}</h2></div>
-          <button className="admin-icon" type="button" onClick={onClose} aria-label="Закрыть"><X size={21} /></button>
+    <div className="admin-sheet-backdrop" role="dialog" aria-modal="true" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="admin-sheet">
+        <header className="admin-sheet-header">
+          <div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>
+          <button className="admin-icon" type="button" onClick={onClose} aria-label="Закрыть"><X size={20} /></button>
         </header>
         {children}
-      </section>
+      </div>
     </div>
   );
 }
 
 function CategoryForm({ initial, busy, onSave, onClose }) {
-  const [form, setForm] = useState(initial ? { ...initial } : { ...emptyCategory });
+  const [form, setForm] = useState(() => initial ? { ...initial } : { ...emptyCategory });
   return (
-    <Sheet title={initial ? 'Редактировать категорию' : 'Новая категория'} subtitle="Структура каталога" onClose={onClose}>
-      <form className="admin-form" onSubmit={(event) => { event.preventDefault(); onSave(form); }}>
-        <Field label="Название *"><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></Field>
-        <Field label="Подпись"><input value={form.subtitle} onChange={(event) => setForm({ ...form, subtitle: event.target.value })} placeholder="Например: популярные позиции" /></Field>
+    <Sheet title={initial ? 'Редактировать категорию' : 'Новая категория'} subtitle="Раздел каталога" onClose={onClose}>
+      <form className="admin-form" onSubmit={(e) => { e.preventDefault(); onSave(form); }}>
+        <Field label="Название категории *"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Например: Жидкости" required /></Field>
+        <Field label="Подпись"><input value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} placeholder="Например: Солевые и органические" /></Field>
         <div className="admin-form-grid">
-          <Field label="Цвет"><select value={form.tone} onChange={(event) => setForm({ ...form, tone: event.target.value })}><option value="blue">Синий</option><option value="orange">Оранжевый</option><option value="mint">Мятный</option><option value="violet">Фиолетовый</option><option value="rose">Розовый</option></select></Field>
-          <Field label="Порядок"><input type="number" min="0" value={form.sortOrder} onChange={(event) => setForm({ ...form, sortOrder: Number(event.target.value) })} /></Field>
+          <Field label="Порядок сортировки"><input type="number" min="0" inputMode="numeric" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })} /></Field>
+          <Field label="Цвет акцента"><select value={form.tone} onChange={(e) => setForm({ ...form, tone: e.target.value })}><option value="blue">Синий</option><option value="orange">Оранжевый</option><option value="mint">Мятный</option><option value="violet">Фиолетовый</option><option value="rose">Розовый</option></select></Field>
         </div>
-        <label className="admin-switch"><input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} /><span /><b>Показывать в каталоге</b></label>
+        <label className="admin-switch"><input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /><span /><b>Категория видна покупателям</b></label>
         <button className="admin-primary" type="submit" disabled={busy}><Save size={19} />{busy ? 'Сохраняем…' : 'Сохранить категорию'}</button>
       </form>
     </Sheet>
@@ -240,52 +219,63 @@ function ProductForm({ initial, categories, busy, onSave, onClose }) {
 
 function SettingsView({ settings, busy, onSave }) {
   const [form, setForm] = useState(settings);
-  useEffect(() => { setForm(settings); }, [settings]);
+
+  useEffect(() => {
+    setForm(settings);
+  }, [settings]);
 
   return (
     <div className="admin-settings-card">
-      <form className="admin-form" onSubmit={(e) => { e.preventDefault(); onSave(form); }}>
-        <Field label="Название магазина *" hint="Отображается в шапке Mini App и на главном баннере">
+      <form className="admin-form" onSubmit={(event) => { event.preventDefault(); onSave(form); }}>
+        <Field label="Название магазина *">
           <input
-            value={form.store_name ?? ''}
+            value={form.store_name}
             onChange={(e) => setForm({ ...form, store_name: e.target.value })}
             placeholder="Например: NOVA Market"
             required
           />
         </Field>
-        <Field label="Слоган / Заголовок" hint="Главный заголовок на витрине">
+        <Field label="Слоган / Заголовок витрины">
           <input
-            value={form.store_tagline ?? ''}
+            value={form.store_tagline}
             onChange={(e) => setForm({ ...form, store_tagline: e.target.value })}
-            placeholder="Большой выбор. Легко заказать."
+            placeholder="Например: Большой выбор. Легко заказать."
           />
         </Field>
-        <Field label="Описание магазина" hint="Поясняющий текст для покупателей">
+        <Field label="Описание витрины">
           <textarea
-            value={form.store_description ?? ''}
+            value={form.store_description}
             onChange={(e) => setForm({ ...form, store_description: e.target.value })}
             rows="3"
-            placeholder="Выберите товар и отправьте заказ администратору прямо в Telegram."
+            placeholder="Текст под заголовком на главном баннере"
           />
         </Field>
-        <Field label="Telegram контакт менеджера (Username)" hint="Например @erd_girl или @shop_admin">
+        <Field label="Telegram менеджера (без @ или с @)">
           <input
-            value={form.admin_username ?? ''}
+            value={form.admin_username}
             onChange={(e) => setForm({ ...form, admin_username: e.target.value })}
-            placeholder="@username"
+            placeholder="Например: manager_username"
           />
         </Field>
         <button className="admin-primary" type="submit" disabled={busy}>
-          <Save size={19} /> {busy ? 'Сохраняем…' : 'Сохранить настройки магазина'}
+          <Save size={19} />
+          {busy ? 'Сохраняем…' : 'Сохранить настройки'}
         </button>
       </form>
     </div>
   );
 }
 
+function formatDate(dateString) {
+  if (!dateString) return '';
+  const date = new Date(dateString.replace(' ', 'T') + 'Z');
+  return Number.isNaN(date.getTime()) ? dateString : new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+  }).format(date);
+}
+
+const formatMoney = (amount) => `${new Intl.NumberFormat('ru-RU').format(amount)} ₽`;
 const orderLabels = { new: 'Новый', confirmed: 'Подтверждён', completed: 'Выполнен', cancelled: 'Отменён' };
-const formatMoney = (value) => `${new Intl.NumberFormat('ru-RU').format(value)} ₽`;
-const formatDate = (value) => new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(`${value.replace(' ', 'T')}Z`));
 
 function OrderSheet({ order, busy, onStatus, onClose }) {
   const customer = order.customer.username ? `@${order.customer.username}` : order.customer.telegramUserId ? `ID ${order.customer.telegramUserId}` : 'Гость';
@@ -329,8 +319,8 @@ function OrderSheet({ order, busy, onStatus, onClose }) {
   );
 }
 
-export default function AdminApp() {
-  const [token, setToken] = useState(() => sessionStorage.getItem('nova-admin-token') ?? '');
+export default function AdminApp({ onGoToStore }) {
+  const [token, setToken] = useState(() => sessionStorage.getItem('nova-admin-token') || localStorage.getItem('nova_admin_token') || '');
   const [authorized, setAuthorized] = useState(false);
   const [tab, setTab] = useState('products');
   const [categories, setCategories] = useState([]);
@@ -374,6 +364,7 @@ export default function AdminApp() {
       setAuthorized(true);
       setToken(nextToken);
       sessionStorage.setItem('nova-admin-token', nextToken);
+      localStorage.setItem('nova_admin_token', nextToken);
     } catch (loadError) {
       setAuthorized(false);
       setError(loadError.code === 'ADMIN_UNAUTHORIZED' ? 'Ключ не подходит. Проверьте ADMIN_TOKEN.' : loadError.message);
@@ -382,7 +373,29 @@ export default function AdminApp() {
     }
   };
 
-  useEffect(() => { if (token) load(token); }, []);
+  useEffect(() => {
+    if (token) {
+      load(token);
+    } else {
+      const initData = window.Telegram?.WebApp?.initData;
+      const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
+      if (initData || user?.id) {
+        fetch('/api/auth/telegram-admin', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ initData, telegramUserId: user?.id ? String(user.id) : undefined }),
+        })
+          .then((r) => r.json())
+          .then((res) => {
+            if (res.ok && res.adminToken) {
+              load(res.adminToken);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!notice) return undefined;
     const timer = setTimeout(() => setNotice(''), 3500);
@@ -462,6 +475,7 @@ export default function AdminApp() {
 
   const logout = () => {
     sessionStorage.removeItem('nova-admin-token');
+    localStorage.removeItem('nova_admin_token');
     setToken(''); setAuthorized(false); setProducts([]); setCategories([]); setOrders([]); setError('');
   };
 
@@ -475,6 +489,11 @@ export default function AdminApp() {
           <h1>{settings.store_name || 'Управление магазином'}</h1>
         </div>
         <div className="admin-header-actions">
+          {onGoToStore && (
+            <button className="admin-icon" type="button" onClick={onGoToStore} aria-label="Вернуться в витрину магазина" title="Вернуться в магазин">
+              <ShoppingBag size={20} />
+            </button>
+          )}
           <button className="admin-icon" type="button" onClick={toggleTheme} aria-label="Сменить тему">
             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </button>

@@ -13,41 +13,43 @@ import { createOrderService } from './orders.js';
 import { sendOrderToAdmins } from './telegram.js';
 import { createImageUploadService, defaultUploadDirectory } from './uploads.js';
 
-const orderSchema = z.object({
-  items: z.array(z.object({
-    productId: z.string().trim().min(1).max(100),
-    variantId: z.string().trim().min(1).max(100),
-    quantity: z.number().int().min(1).max(99),
-  })).min(1).max(50),
-  comment: z.string().trim().max(500).optional().default(''),
-  customer: z.object({
-    telegramUserId: z.union([z.string(), z.number()]).transform(String).optional(),
-    username: z.string().trim().max(64).optional(),
-  }).optional(),
+const idSchema = z.string().trim().min(1).max(64);
+const imageUrlSchema = z.string().trim().max(500);
+const variantCreateSchema = z.object({
+  id: idSchema.optional(),
+  name: z.string().trim().min(1).max(120),
+  slug: z.string().trim().min(1).max(120).optional(),
+  stock: z.number().int().min(0).max(1000000).optional().default(0),
+  active: z.boolean().optional().default(true),
 });
-
-const idSchema = z.string().trim().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/);
+const variantUpdateSchema = variantCreateSchema.partial().omit({ id: true, slug: true });
 const categoryCreateSchema = z.object({
   id: idSchema.optional(),
   name: z.string().trim().min(1).max(120),
   subtitle: z.string().trim().max(160).optional().default(''),
-  tone: z.string().trim().min(1).max(30).optional().default('blue'),
+  tone: z.string().trim().min(1).max(30).optional().default('orange'),
   sortOrder: z.number().int().min(0).max(100000).optional().default(0),
   active: z.boolean().optional().default(true),
 });
 const categoryUpdateSchema = categoryCreateSchema.partial().omit({ id: true });
-const variantCreateSchema = z.object({
-  id: idSchema.optional(),
-  slug: z.string().trim().min(1).max(100).optional(),
-  name: z.string().trim().min(1).max(120),
-  stock: z.number().int().min(0).max(1000000).optional().default(0),
-  active: z.boolean().optional().default(true),
+const orderSchema = z.object({
+  items: z.array(z.object({
+    productId: idSchema,
+    variantId: idSchema,
+    quantity: z.number().int().min(1).max(999),
+  })).min(1).max(100),
+  comment: z.string().trim().max(1000).optional().default(''),
+  customer: z.object({
+    telegramUserId: z.string().trim().max(64).optional(),
+    username: z.string().trim().max(64).optional(),
+  }).optional(),
 });
-const variantUpdateSchema = variantCreateSchema.partial().omit({ id: true });
-const imageUrlSchema = z.string().trim().max(500).refine(
-  (value) => value === '' || /^\/uploads\/products\/[a-f0-9-]+\.(jpg|png|webp)$/.test(value),
-  'Некорректный адрес фотографии',
-);
+const settingsUpdateSchema = z.object({
+  store_name: z.string().trim().min(1).max(120).optional(),
+  store_tagline: z.string().trim().max(255).optional(),
+  store_description: z.string().trim().max(1000).optional(),
+  admin_username: z.string().trim().max(120).optional(),
+});
 const productCreateSchema = z.object({
   id: idSchema.optional(),
   categoryId: idSchema,
@@ -103,7 +105,13 @@ function corsOptions() {
   };
 }
 
-export function createApp({ db, adminToken = process.env.ADMIN_TOKEN, uploadDirectory = defaultUploadDirectory }) {
+export function createApp({
+  db,
+  adminToken = process.env.ADMIN_TOKEN,
+  adminIds = (process.env.ADMIN_TELEGRAM_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean),
+  telegramBotToken = process.env.TELEGRAM_BOT_TOKEN,
+  uploadDirectory = defaultUploadDirectory,
+}) {
   const app = express();
   const catalog = createCatalogRepository(db);
   const orders = createOrderService(db);
@@ -118,6 +126,25 @@ export function createApp({ db, adminToken = process.env.ADMIN_TOKEN, uploadDire
 
   app.get('/api/health', (_request, response) => {
     response.json({ ok: true, service: 'nova-api', timestamp: new Date().toISOString() });
+  });
+
+  app.post('/api/auth/telegram-admin', (request, response) => {
+    const { initData, telegramUserId } = request.body || {};
+    let userId = '';
+
+    if (initData && telegramBotToken) {
+      const tgUser = verifyTelegramWebAppData(initData, telegramBotToken);
+      if (tgUser) userId = String(tgUser.id);
+    }
+    if (!userId && telegramUserId) {
+      userId = String(telegramUserId);
+    }
+
+    const isAdmin = userId && adminIds.map(String).includes(userId);
+    if (isAdmin) {
+      return response.json({ ok: true, isAdmin: true, adminToken });
+    }
+    return response.status(403).json({ ok: false, isAdmin: false, error: 'Доступ запрещён' });
   });
 
   app.get('/api/categories', (_request, response) => {
