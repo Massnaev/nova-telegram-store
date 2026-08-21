@@ -2,7 +2,7 @@ import { createApp } from './app.js';
 import { createDatabase } from './db.js';
 import { startBotPolling } from './telegram.js';
 
-const port = Number.parseInt(process.env.PORT ?? process.env.API_PORT ?? '3001', 10);
+const port = Number.parseInt(process.env.PORT ?? process.env.API_PORT ?? '3000', 10);
 const db = createDatabase();
 const app = createApp({ db });
 
