@@ -125,8 +125,8 @@ export function startBotPolling({ botToken, adminIds, getStoreInfo, appUrl = '' 
   async function handleMessage(msg) {
     const chatId = msg.chat?.id;
     const text = msg.text?.trim() || '';
-    const userId = String(msg.from?.id || '');
-    const isAdmin = adminIds.map(String).includes(userId);
+    const cleanAdminIds = adminIds.map((id) => String(id).trim().replace(/["']/g, ''));
+    const isAdmin = cleanAdminIds.includes(userId);
 
     if (!chatId) return;
 

@@ -108,7 +108,7 @@ function corsOptions() {
 export function createApp({
   db,
   adminToken = process.env.ADMIN_TOKEN,
-  adminIds = (process.env.ADMIN_TELEGRAM_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean),
+  adminIds = (process.env.ADMIN_TELEGRAM_IDS ?? '').replace(/["']/g, '').split(',').map((id) => id.trim()).filter(Boolean),
   telegramBotToken = process.env.TELEGRAM_BOT_TOKEN,
   uploadDirectory = defaultUploadDirectory,
 }) {
@@ -132,6 +132,14 @@ export function createApp({
     response.json({ ok: true, service: 'nova-api', timestamp: new Date().toISOString() });
   });
 
+  app.post('/api/auth/login', (request, response) => {
+    const { token } = request.body || {};
+    if (isValidToken(token, adminToken)) {
+      return response.json({ ok: true, isAdmin: true, adminToken });
+    }
+    return response.status(401).json({ ok: false, error: 'Неверный ключ администратора' });
+  });
+
   app.post('/api/auth/telegram-admin', (request, response) => {
     const { initData, telegramUserId } = request.body || {};
     let userId = '';
@@ -144,7 +152,8 @@ export function createApp({
       userId = String(telegramUserId);
     }
 
-    const isAdmin = userId && adminIds.map(String).includes(userId);
+    const cleanAdminIds = adminIds.map((id) => String(id).trim().replace(/["']/g, ''));
+    const isAdmin = userId && cleanAdminIds.includes(userId);
     if (isAdmin) {
       return response.json({ ok: true, isAdmin: true, adminToken });
     }

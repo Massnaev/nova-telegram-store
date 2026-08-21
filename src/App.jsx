@@ -4,6 +4,7 @@ import {
   Check,
   ChevronRight,
   Home,
+  Lock,
   Minus,
   Moon,
   PackageCheck,
@@ -39,22 +40,22 @@ function ProductArt({ tone = 'orange', compact = false, imageUrl = '', alt = '' 
   );
 }
 
-function IconButton({ label, children, className = '', ...props }) {
+function IconButton({ label, children, onClick, className = '', title }) {
   return (
-    <button className={`icon-button ${className}`} aria-label={label} type="button" {...props}>
+    <button className={`icon-button ${className}`} type="button" onClick={onClick} aria-label={label} title={title || label}>
       {children}
     </button>
   );
 }
 
-function AppHeader({ title, subtitle, canGoBack, onBack, cartCount, onCart, theme, onToggleTheme, brandName, isAdmin, onGoToAdmin }) {
+function AppHeader({ title, subtitle, canGoBack, onBack, cartCount, onCart, theme, onToggleTheme, brandName, isAdmin, onOpenAdmin }) {
   return (
     <header className="app-header">
       <div className="header-side">
         {canGoBack ? (
           <IconButton label="Назад" onClick={onBack}><ArrowLeft size={22} /></IconButton>
         ) : (
-          <div className="brand-mark" aria-label={brandName || 'NOVA'}>
+          <div className="brand-mark" aria-label={brandName || 'NOVA'} onClick={onOpenAdmin} style={{ cursor: 'pointer' }} title="Управление">
             {(brandName || 'N').trim().charAt(0).toUpperCase()}
           </div>
         )}
@@ -64,11 +65,9 @@ function AppHeader({ title, subtitle, canGoBack, onBack, cartCount, onCart, them
         {subtitle && <span>{subtitle}</span>}
       </div>
       <div className="header-side header-side-right" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-        {isAdmin && onGoToAdmin && (
-          <IconButton label="Панель администратора" onClick={onGoToAdmin} className="admin-header-btn" title="Панель администратора">
-            <Shield size={19} color="var(--blue)" />
-          </IconButton>
-        )}
+        <IconButton label="Панель администратора" onClick={onOpenAdmin} className="admin-header-btn" title="Панель администратора">
+          <Shield size={19} color={isAdmin ? 'var(--blue)' : 'var(--muted)'} />
+        </IconButton>
         <IconButton label="Сменить тему" onClick={onToggleTheme} className="theme-toggle-btn">
           {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
         </IconButton>
@@ -81,7 +80,7 @@ function AppHeader({ title, subtitle, canGoBack, onBack, cartCount, onCart, them
   );
 }
 
-function HomeScreen({ categories, products, settings, onCategory, onSearch, onProduct }) {
+function HomeScreen({ categories, products, settings, onCategory, onSearch, onProduct, onOpenAdmin, isAdmin }) {
   return (
     <main className="screen screen-home">
       <section className="hero-card">
@@ -125,6 +124,28 @@ function HomeScreen({ categories, products, settings, onCategory, onSearch, onPr
           ))}
         </div>
       </section>
+
+      <footer style={{ marginTop: '28px', padding: '16px 0 32px', textAlign: 'center' }}>
+        <button
+          type="button"
+          onClick={onOpenAdmin}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--muted)',
+            fontSize: '11px',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            opacity: 0.7,
+            padding: '8px 12px',
+            borderRadius: '8px',
+          }}
+        >
+          <Lock size={13} /> {isAdmin ? '⚙️ Панель администратора' : '⚙️ Вход для администратора'}
+        </button>
+      </footer>
     </main>
   );
 }
@@ -551,8 +572,50 @@ export default function App({ onGoToAdmin }) {
     }
   };
 
+  const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [adminLoginError, setAdminLoginError] = useState('');
+  const [adminLoginBusy, setAdminLoginBusy] = useState(false);
+
+  const handleOpenAdmin = () => {
+    if (isAdmin && onGoToAdmin) {
+      onGoToAdmin();
+    } else {
+      setShowAdminLoginModal(true);
+    }
+  };
+
+  const handleAdminPasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!adminPasswordInput.trim()) return;
+    setAdminLoginBusy(true);
+    setAdminLoginError('');
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: adminPasswordInput.trim() }),
+      });
+      const data = await response.json();
+      if (response.ok && data.ok) {
+        setIsAdmin(true);
+        if (data.adminToken) localStorage.setItem('nova_admin_token', data.adminToken);
+        setShowAdminLoginModal(false);
+        setAdminPasswordInput('');
+        setToast('Авторизован как администратор');
+        if (onGoToAdmin) onGoToAdmin();
+      } else {
+        setAdminLoginError(data.error || 'Неверный ключ администратора');
+      }
+    } catch {
+      setAdminLoginError('Ошибка подключения к серверу');
+    } finally {
+      setAdminLoginBusy(false);
+    }
+  };
+
   const renderScreen = () => {
-    if (screen === 'home') return <HomeScreen categories={categories} products={products} settings={settings} onCategory={openCategory} onSearch={() => go('search')} onProduct={openProduct} />;
+    if (screen === 'home') return <HomeScreen categories={categories} products={products} settings={settings} onCategory={openCategory} onSearch={() => go('search')} onProduct={openProduct} onOpenAdmin={handleOpenAdmin} isAdmin={isAdmin} />;
     if (screen === 'category') return <CatalogScreen categories={categories} products={products} categoryId={categoryId} onProduct={openProduct} />;
     if (screen === 'search') return <SearchScreen products={products} onProduct={openProduct} />;
     if (screen === 'product') return <ProductScreen product={selectedProduct} onAdd={addToCart} />;
@@ -589,11 +652,65 @@ export default function App({ onGoToAdmin }) {
           onToggleTheme={toggleTheme}
           brandName={settings.store_name}
           isAdmin={isAdmin}
-          onGoToAdmin={onGoToAdmin}
+          onOpenAdmin={handleOpenAdmin}
         />
         {renderScreen()}
         <BottomNav screen={screen} cartCount={cartCount} onHome={() => { setHistory([]); setScreen('home'); }} onCatalog={() => openCategory(categoryId)} onCart={() => go('cart')} />
         <div className={`toast ${toast ? 'visible' : ''}`} role="status" aria-live="polite"><Check size={17} />{toast}</div>
+
+        {showAdminLoginModal && (
+          <div className="admin-sheet-backdrop" role="dialog" aria-modal="true" onClick={(e) => e.target === e.currentTarget && setShowAdminLoginModal(false)}>
+            <div className="admin-sheet" style={{ minHeight: 'auto', paddingBottom: '24px' }}>
+              <header className="admin-sheet-header">
+                <div>
+                  <h2 style={{ fontSize: '18px', margin: 0 }}>Панель управления</h2>
+                  <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '4px 0 0' }}>Введите ключ администратора (ADMIN_TOKEN)</p>
+                </div>
+                <button className="icon-button" type="button" onClick={() => setShowAdminLoginModal(false)}><X size={20} /></button>
+              </header>
+              <form onSubmit={handleAdminPasswordSubmit} style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <input
+                  type="password"
+                  value={adminPasswordInput}
+                  onChange={(e) => setAdminPasswordInput(e.target.value)}
+                  placeholder="Введите ключ доступа"
+                  autoFocus
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '13px 15px',
+                    borderRadius: '13px',
+                    border: '1px solid var(--line)',
+                    background: 'var(--surface)',
+                    color: 'var(--navy)',
+                    fontSize: '15px',
+                    outline: 'none',
+                  }}
+                />
+                {adminLoginError && (
+                  <div style={{ color: '#ef4444', fontSize: '13px', fontWeight: 600 }}>{adminLoginError}</div>
+                )}
+                <button
+                  type="submit"
+                  disabled={adminLoginBusy || !adminPasswordInput.trim()}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    borderRadius: '13px',
+                    border: 'none',
+                    background: 'var(--blue)',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: '15px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {adminLoginBusy ? 'Проверяем…' : 'Войти'}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
