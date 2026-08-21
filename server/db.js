@@ -10,6 +10,7 @@ class SqlJsDatabaseAdapter {
   constructor(databasePath) {
     this.databasePath = databasePath;
     this.isMemory = !databasePath || databasePath === ':memory:';
+    this.inTransaction = false;
     if (!this.isMemory && existsSync(databasePath)) {
       try {
         const fileBuffer = readFileSync(databasePath);
@@ -23,18 +24,34 @@ class SqlJsDatabaseAdapter {
   }
 
   save() {
-    if (!this.isMemory && this.databasePath) {
-      try {
-        mkdirSync(dirname(this.databasePath), { recursive: true });
-        const binaryArray = this.db.export();
-        writeFileSync(this.databasePath, Buffer.from(binaryArray));
-      } catch (err) {
-        console.error('Failed to save sqlite file:', err);
-      }
+    if (this.inTransaction || this.isMemory || !this.databasePath) return;
+    try {
+      mkdirSync(dirname(this.databasePath), { recursive: true });
+      const binaryArray = this.db.export();
+      writeFileSync(this.databasePath, Buffer.from(binaryArray));
+    } catch (err) {
+      console.error('Failed to save sqlite file:', err);
     }
   }
 
   exec(sql) {
+    const trimmed = sql.trim().toUpperCase();
+    if (trimmed.startsWith('BEGIN')) {
+      this.inTransaction = true;
+      try { this.db.exec(sql); } catch {}
+      return;
+    }
+    if (trimmed.startsWith('COMMIT')) {
+      try { this.db.exec(sql); } catch {}
+      this.inTransaction = false;
+      this.save();
+      return;
+    }
+    if (trimmed.startsWith('ROLLBACK')) {
+      try { this.db.exec(sql); } catch {}
+      this.inTransaction = false;
+      return;
+    }
     this.db.exec(sql);
     this.save();
   }
@@ -69,8 +86,6 @@ class SqlJsDatabaseAdapter {
         const stmt = self.db.prepare(sql);
         if (flatParams.length > 0) stmt.bind(flatParams);
         stmt.step();
-        stmt.free();
-        self.save();
         const rowsModified = self.db.getRowsModified();
         let lastInsertRowid = 0;
         try {
@@ -79,12 +94,15 @@ class SqlJsDatabaseAdapter {
             lastInsertRowid = lastIdRes[0].values[0][0];
           }
         } catch {}
+        stmt.free();
+        self.save();
         return { changes: rowsModified, lastInsertRowid };
       },
     };
   }
 
   close() {
+    this.inTransaction = false;
     this.save();
     this.db.close();
   }
