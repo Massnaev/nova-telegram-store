@@ -119,7 +119,11 @@ export function createApp({
   const images = createImageUploadService(uploadDirectory);
 
   app.disable('x-powered-by');
-  app.use(helmet({ crossOriginResourcePolicy: false }));
+  app.use(helmet({
+    crossOriginResourcePolicy: false,
+    frameguard: false,
+    contentSecurityPolicy: false,
+  }));
   app.use(cors(corsOptions()));
   app.use(express.json({ limit: '100kb' }));
   app.use('/uploads/products', express.static(images.uploadDirectory, { maxAge: '7d', immutable: false }));
