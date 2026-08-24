@@ -13,7 +13,7 @@ function Root() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const isAdmin = hash === '#admin' || new URLSearchParams(window.location.search).has('admin');
+  const isAdmin = hash === '#admin';
 
   return (
     <React.StrictMode>
@@ -27,4 +27,3 @@ function Root() {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
-

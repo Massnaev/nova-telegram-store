@@ -13,7 +13,10 @@ export function verifyTelegramWebAppData(initData, botToken) {
   try {
     const params = new URLSearchParams(initData);
     const hash = params.get('hash');
-    if (!hash) return null;
+    const authDate = Number.parseInt(params.get('auth_date') ?? '', 10);
+    const now = Math.floor(Date.now() / 1000);
+    if (!hash || !/^[a-f0-9]{64}$/i.test(hash) || !Number.isInteger(authDate)) return null;
+    if (authDate > now + 60 || now - authDate > 600) return null;
     params.delete('hash');
 
     const keys = Array.from(params.keys()).sort();
@@ -22,7 +25,7 @@ export function verifyTelegramWebAppData(initData, botToken) {
     const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
     const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
 
-    if (calculatedHash !== hash) return null;
+    if (!crypto.timingSafeEqual(Buffer.from(calculatedHash, 'hex'), Buffer.from(hash, 'hex'))) return null;
 
     const userStr = params.get('user');
     return userStr ? JSON.parse(userStr) : null;
@@ -184,5 +187,4 @@ export function startBotPolling({ botToken, adminIds, getStoreInfo, appUrl = '' 
 
   return () => { isRunning = false; };
 }
-
 

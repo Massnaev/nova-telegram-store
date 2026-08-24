@@ -54,7 +54,11 @@ export function createCatalogRepository(db) {
     },
 
     listProducts({ category, search }) {
-      const conditions = ['p.active = 1'];
+      const conditions = [
+        'p.active = 1',
+        'c.active = 1',
+        'EXISTS (SELECT 1 FROM variants available_variant WHERE available_variant.product_id = p.id AND available_variant.active = 1)',
+      ];
       const values = [];
       if (category) {
         conditions.push('p.category_id = ?');
@@ -83,7 +87,8 @@ export function createCatalogRepository(db) {
         SELECT p.*, c.name AS category_name
         FROM products p
         JOIN categories c ON c.id = p.category_id
-        WHERE p.id = ? AND p.active = 1
+        WHERE p.id = ? AND p.active = 1 AND c.active = 1
+          AND EXISTS (SELECT 1 FROM variants available_variant WHERE available_variant.product_id = p.id AND available_variant.active = 1)
       `).get(id);
       return row ? mapProduct(row) : null;
     },

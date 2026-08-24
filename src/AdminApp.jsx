@@ -378,12 +378,11 @@ export default function AdminApp({ onGoToStore }) {
       load(token);
     } else {
       const initData = window.Telegram?.WebApp?.initData;
-      const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
-      if (initData || user?.id) {
+      if (initData) {
         fetch('/api/auth/telegram-admin', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ initData, telegramUserId: user?.id ? String(user.id) : undefined }),
+          body: JSON.stringify({ initData }),
         })
           .then((r) => r.json())
           .then((res) => {
@@ -593,4 +592,3 @@ export default function AdminApp({ onGoToStore }) {
     </div>
   );
 }
-

@@ -10,7 +10,7 @@ import { createAdminCatalogService } from './admin.js';
 import { createCatalogRepository } from './catalog.js';
 import { ApiError } from './errors.js';
 import { createOrderService } from './orders.js';
-import { sendOrderToAdmins } from './telegram.js';
+import { sendOrderToAdmins, verifyTelegramWebAppData } from './telegram.js';
 import { createImageUploadService, defaultUploadDirectory } from './uploads.js';
 
 const idSchema = z.string().trim().min(1).max(64);
@@ -110,6 +110,7 @@ export function createApp({
   adminToken = process.env.ADMIN_TOKEN,
   adminIds = (process.env.ADMIN_TELEGRAM_IDS ?? '').replace(/["']/g, '').split(',').map((id) => id.trim()).filter(Boolean),
   telegramBotToken = process.env.TELEGRAM_BOT_TOKEN,
+  sendOrderNotification = sendOrderToAdmins,
   uploadDirectory = defaultUploadDirectory,
 }) {
   const app = express();
@@ -141,16 +142,9 @@ export function createApp({
   });
 
   app.post('/api/auth/telegram-admin', (request, response) => {
-    const { initData, telegramUserId } = request.body || {};
-    let userId = '';
-
-    if (initData && telegramBotToken) {
-      const tgUser = verifyTelegramWebAppData(initData, telegramBotToken);
-      if (tgUser) userId = String(tgUser.id);
-    }
-    if (!userId && telegramUserId) {
-      userId = String(telegramUserId);
-    }
+    const { initData } = request.body || {};
+    const tgUser = verifyTelegramWebAppData(initData, telegramBotToken);
+    const userId = tgUser?.id ? String(tgUser.id) : '';
 
     const cleanAdminIds = adminIds.map((id) => String(id).trim().replace(/["']/g, ''));
     const isAdmin = userId && cleanAdminIds.includes(userId);
@@ -183,30 +177,11 @@ export function createApp({
     }
     const order = orders.createOrder(parsed.data);
 
-    const adminIds = process.env.ADMIN_TELEGRAM_IDS?.split(',').map(id => id.trim()).filter(Boolean) || [];
-    sendOrderToAdmins(order, process.env.TELEGRAM_BOT_TOKEN, adminIds)
+    sendOrderNotification(telegramBotToken, adminIds, order)
       .then(() => console.log(`[API] Order #${order.id} notification sent to admins`))
       .catch(err => console.error(`[API] Failed to notify admins for order #${order.id}:`, err));
 
     response.status(201).json({ data: order });
-  });
-
-  app.post('/api/orders/:id/notify', async (request, response) => {
-    console.log(`[API] Notification requested for order ${request.params.id}`);
-    const id = Number.parseInt(request.params.id, 10);
-    if (!Number.isInteger(id) || id < 1) throw new ApiError('Некорректный номер заказа', 400, 'INVALID_ORDER_ID');
-    
-    const order = orders.getOrder(id);
-    if (!order) {
-      console.error(`[API] Order ${id} not found`);
-      throw new ApiError('Заказ не найден', 404, 'ORDER_NOT_FOUND');
-    }
-
-    const adminIds = process.env.ADMIN_TELEGRAM_IDS?.split(',').map(id => id.trim()).filter(Boolean) || [];
-    console.log(`[API] Sending to admins:`, adminIds);
-    sendOrderToAdmins(order, process.env.TELEGRAM_BOT_TOKEN, adminIds).then(() => console.log('[API] Telegram message sent successfully')).catch(err => console.error('[API] Telegram message failed', err));
-
-    response.status(200).json({ success: true });
   });
 
   app.get('/api/settings', (_request, response) => {

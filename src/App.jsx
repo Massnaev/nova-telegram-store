@@ -40,9 +40,9 @@ function ProductArt({ tone = 'orange', compact = false, imageUrl = '', alt = '' 
   );
 }
 
-function IconButton({ label, children, onClick, className = '', title }) {
+function IconButton({ label, children, onClick, className = '', title, ...buttonProps }) {
   return (
-    <button className={`icon-button ${className}`} type="button" onClick={onClick} aria-label={label} title={title || label}>
+    <button className={`icon-button ${className}`} type="button" onClick={onClick} aria-label={label} title={title || label} {...buttonProps}>
       {children}
     </button>
   );
@@ -55,7 +55,13 @@ function AppHeader({ title, subtitle, canGoBack, onBack, cartCount, onCart, them
         {canGoBack ? (
           <IconButton label="Назад" onClick={onBack}><ArrowLeft size={22} /></IconButton>
         ) : (
-          <div className="brand-mark" aria-label={brandName || 'NOVA'} onClick={onOpenAdmin} style={{ cursor: 'pointer' }} title="Управление">
+          <div
+            className="brand-mark"
+            aria-label={brandName || 'NOVA'}
+            onClick={isAdmin ? onOpenAdmin : undefined}
+            style={isAdmin ? { cursor: 'pointer' } : undefined}
+            title={isAdmin ? 'Управление' : undefined}
+          >
             {(brandName || 'N').trim().charAt(0).toUpperCase()}
           </div>
         )}
@@ -65,9 +71,11 @@ function AppHeader({ title, subtitle, canGoBack, onBack, cartCount, onCart, them
         {subtitle && <span>{subtitle}</span>}
       </div>
       <div className="header-side header-side-right" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-        <IconButton label="Панель администратора" onClick={onOpenAdmin} className="admin-header-btn" title="Панель администратора">
-          <Shield size={19} color={isAdmin ? 'var(--blue)' : 'var(--muted)'} />
-        </IconButton>
+        {isAdmin && (
+          <IconButton label="Панель администратора" onClick={onOpenAdmin} className="admin-header-btn" title="Панель администратора">
+            <Shield size={19} color="var(--blue)" />
+          </IconButton>
+        )}
         <IconButton label="Сменить тему" onClick={onToggleTheme} className="theme-toggle-btn">
           {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
         </IconButton>
@@ -125,7 +133,7 @@ function HomeScreen({ categories, products, settings, onCategory, onSearch, onPr
         </div>
       </section>
 
-      <footer style={{ marginTop: '28px', padding: '16px 0 32px', textAlign: 'center' }}>
+      {isAdmin && <footer style={{ marginTop: '28px', padding: '16px 0 32px', textAlign: 'center' }}>
         <button
           type="button"
           onClick={onOpenAdmin}
@@ -143,9 +151,9 @@ function HomeScreen({ categories, products, settings, onCategory, onSearch, onPr
             borderRadius: '8px',
           }}
         >
-          <Lock size={13} /> {isAdmin ? '⚙️ Панель администратора' : '⚙️ Вход для администратора'}
+          <Lock size={13} /> ⚙️ Панель администратора
         </button>
-      </footer>
+      </footer>}
     </main>
   );
 }
@@ -186,7 +194,7 @@ function SearchScreen({ products, onProduct }) {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return products;
     return products.filter((item) => `${item.name} ${item.caption} ${item.variants.map((v) => v.name).join(' ')}`.toLowerCase().includes(normalized));
-  }, [query]);
+  }, [query, products]);
 
   return (
     <main className="screen">
@@ -215,12 +223,16 @@ function SearchScreen({ products, onProduct }) {
 
 function ProductScreen({ product, onAdd }) {
   const firstAvailable = product.variants.find((variant) => variant.stock > 0) ?? product.variants[0];
-  const [variantId, setVariantId] = useState(firstAvailable.id);
+  const [variantId, setVariantId] = useState(firstAvailable?.id ?? '');
   const [quantity, setQuantity] = useState(1);
   const variant = product.variants.find((item) => item.id === variantId);
-  const available = variant.stock > 0;
+  const available = Boolean(variant && variant.stock > 0);
 
   useEffect(() => setQuantity(1), [variantId]);
+  useEffect(() => {
+    const nextVariant = product.variants.find((item) => item.stock > 0) ?? product.variants[0];
+    setVariantId(nextVariant?.id ?? '');
+  }, [product.id, product.variants]);
 
   return (
     <main className="screen product-screen">
@@ -231,7 +243,7 @@ function ProductScreen({ product, onAdd }) {
           <strong>{formatPrice(product.price)}</strong>
         </div>
         <p>Насыщенный вкус, аккуратный баланс и проверенное качество NOVA.</p>
-        <div className="field-label"><span>Выберите вкус</span><small>{variant.stock} шт. в наличии</small></div>
+        <div className="field-label"><span>Выберите вкус</span><small>{variant ? `${variant.stock} шт. в наличии` : 'Нет доступных вариантов'}</small></div>
         <div className="variant-list" role="radiogroup" aria-label="Выберите вкус">
           {product.variants.map((item) => (
             <button
@@ -252,12 +264,12 @@ function ProductScreen({ product, onAdd }) {
           <div className="stepper">
             <IconButton label="Уменьшить количество" disabled={quantity <= 1} onClick={() => setQuantity((value) => value - 1)}><Minus size={18} /></IconButton>
             <strong>{quantity}</strong>
-            <IconButton label="Увеличить количество" disabled={quantity >= variant.stock} onClick={() => setQuantity((value) => value + 1)}><Plus size={18} /></IconButton>
+            <IconButton label="Увеличить количество" disabled={!variant || quantity >= variant.stock} onClick={() => setQuantity((value) => value + 1)}><Plus size={18} /></IconButton>
           </div>
         </div>
       </div>
       <div className="sticky-action">
-        <button className="primary-button" type="button" disabled={!available} onClick={() => onAdd(product, variant, quantity)}>
+        <button className="primary-button" type="button" disabled={!available} onClick={() => variant && onAdd(product, variant, quantity)}>
           <ShoppingBag size={20} /> {available ? `Добавить · ${formatPrice(product.price * quantity)}` : 'Нет в наличии'}
         </button>
       </div>
@@ -381,7 +393,7 @@ function BottomNav({ screen, cartCount, onHome, onCatalog, onCart }) {
 export default function App({ onGoToAdmin }) {
   const [categories, setCategories] = useState(fallbackCategories);
   const [products, setProducts] = useState(fallbackProducts);
-  const [isAdmin, setIsAdmin] = useState(() => Boolean(localStorage.getItem('nova_admin_token')));
+  const [isAdmin, setIsAdmin] = useState(false);
   const [settings, setSettings] = useState({
     store_name: 'NOVA Market',
     store_tagline: 'Большой выбор. Легко заказать.',
@@ -462,12 +474,22 @@ export default function App({ onGoToAdmin }) {
 
   useEffect(() => {
     const initData = window.Telegram?.WebApp?.initData;
-    const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
-    if (initData || user?.id) {
+    const storedToken = localStorage.getItem('nova_admin_token');
+
+    if (storedToken) {
+      fetch('/api/admin/settings', { headers: { authorization: `Bearer ${storedToken}` } })
+        .then((response) => {
+          if (!response.ok) throw new Error('ADMIN_UNAUTHORIZED');
+          setIsAdmin(true);
+        })
+        .catch(() => localStorage.removeItem('nova_admin_token'));
+    }
+
+    if (initData) {
       fetch('/api/auth/telegram-admin', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ initData, telegramUserId: user?.id ? String(user.id) : undefined }),
+        body: JSON.stringify({ initData }),
       })
         .then((r) => r.json())
         .then((res) => {
@@ -715,5 +737,4 @@ export default function App({ onGoToAdmin }) {
     </div>
   );
 }
-
 

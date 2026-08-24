@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,11 +15,31 @@ const adminHeaders = {
   authorization: 'Bearer test-admin-token',
   'content-type': 'application/json',
 };
+const telegramBotToken = 'test-bot-token';
+
+function telegramInitData(userId, authDate = Math.floor(Date.now() / 1000)) {
+  const params = new URLSearchParams({
+    auth_date: String(authDate),
+    user: JSON.stringify({ id: userId, username: 'admin' }),
+  });
+  const dataCheckString = Array.from(params.keys()).sort().map((key) => `${key}=${params.get(key)}`).join('\n');
+  const secretKey = createHmac('sha256', 'WebAppData').update(telegramBotToken).digest();
+  const hash = createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+  params.set('hash', hash);
+  return params.toString();
+}
 
 before(async () => {
   db = createDatabase(':memory:');
   uploadDirectory = mkdtempSync(join(tmpdir(), 'nova-uploads-'));
-  server = createApp({ db, adminToken: 'test-admin-token', uploadDirectory }).listen(0, '127.0.0.1');
+  server = createApp({
+    db,
+    adminToken: 'test-admin-token',
+    adminIds: ['123456'],
+    telegramBotToken,
+    sendOrderNotification: async () => {},
+    uploadDirectory,
+  }).listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
 });
@@ -53,6 +74,36 @@ test('административный каталог закрыт токено�
   assert.equal(body.error.code, 'ADMIN_UNAUTHORIZED');
 });
 
+test('Telegram-авторизация не доверяет ID без подписанного initData', async () => {
+  const forgedResponse = await fetch(`${baseUrl}/api/auth/telegram-admin`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ telegramUserId: '123456' }),
+  });
+  assert.equal(forgedResponse.status, 403);
+
+  const validResponse = await fetch(`${baseUrl}/api/auth/telegram-admin`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ initData: telegramInitData(123456) }),
+  });
+  const validBody = await validResponse.json();
+  assert.equal(validResponse.status, 200);
+  assert.equal(validBody.isAdmin, true);
+
+  const staleResponse = await fetch(`${baseUrl}/api/auth/telegram-admin`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ initData: telegramInitData(123456, Math.floor(Date.now() / 1000) - 601) }),
+  });
+  assert.equal(staleResponse.status, 403);
+});
+
+test('публичный маршрут повторной отправки уведомлений отсутствует', async () => {
+  const response = await fetch(`${baseUrl}/api/orders/1/notify`, { method: 'POST' });
+  assert.equal(response.status, 404);
+});
+
 test('администратор создаёт категорию, товар и меняет остаток', async () => {
   const categoryResponse = await fetch(`${baseUrl}/api/admin/categories`, {
     method: 'POST', headers: adminHeaders,
@@ -81,6 +132,37 @@ test('администратор создаёт категорию, товар �
   const publicResponse = await fetch(`${baseUrl}/api/products/starter-kit`);
   const publicBody = await publicResponse.json();
   assert.equal(publicBody.data.variants[0].stock, 11);
+});
+
+test('публичный каталог скрывает товары выключенных категорий и товары без вариантов', async () => {
+  await fetch(`${baseUrl}/api/admin/categories`, {
+    method: 'POST', headers: adminHeaders,
+    body: JSON.stringify({ id: 'hidden-category', name: 'Скрытая категория', active: false }),
+  });
+  await fetch(`${baseUrl}/api/admin/products`, {
+    method: 'POST', headers: adminHeaders,
+    body: JSON.stringify({
+      id: 'hidden-product', categoryId: 'hidden-category', name: 'Скрытый товар', price: 100,
+      variants: [{ id: 'hidden-product-default', name: 'Обычный', stock: 1 }],
+    }),
+  });
+  assert.equal((await fetch(`${baseUrl}/api/products/hidden-product`)).status, 404);
+
+  await fetch(`${baseUrl}/api/admin/categories`, {
+    method: 'POST', headers: adminHeaders,
+    body: JSON.stringify({ id: 'empty-product-category', name: 'Пустые товары' }),
+  });
+  await fetch(`${baseUrl}/api/admin/products`, {
+    method: 'POST', headers: adminHeaders,
+    body: JSON.stringify({
+      id: 'empty-product', categoryId: 'empty-product-category', name: 'Товар без вариантов', price: 100,
+      variants: [{ id: 'empty-product-default', name: 'Обычный', stock: 1 }],
+    }),
+  });
+  await fetch(`${baseUrl}/api/admin/variants/empty-product-default`, {
+    method: 'DELETE', headers: adminHeaders,
+  });
+  assert.equal((await fetch(`${baseUrl}/api/products/empty-product`)).status, 404);
 });
 
 test('администратор загружает, получает и удаляет фотографию', async () => {
