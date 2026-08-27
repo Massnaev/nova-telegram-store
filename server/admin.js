@@ -192,12 +192,19 @@ export function createAdminCatalogService(db) {
   }
 
   function deleteProduct(id) {
-    const { count } = db.prepare('SELECT COUNT(*) AS count FROM order_items WHERE product_id = ?').get(id);
-    const result = count > 0
-      ? db.prepare('UPDATE products SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id)
-      : db.prepare('DELETE FROM products WHERE id = ?').run(id);
-    if (count > 0) db.prepare('UPDATE variants SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?').run(id);
-    if (!result.changes) throw new ApiError('Товар не найден', 404, 'PRODUCT_NOT_FOUND');
+    const product = db.prepare('SELECT image_url FROM products WHERE id = ?').get(id);
+    if (!product) throw new ApiError('Товар не найден', 404, 'PRODUCT_NOT_FOUND');
+
+    db.exec('BEGIN');
+    try {
+      db.prepare('DELETE FROM variants WHERE product_id = ?').run(id);
+      db.prepare('DELETE FROM products WHERE id = ?').run(id);
+      db.exec('COMMIT');
+      return { imageUrl: product.image_url ?? '' };
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   function createVariant(productId, input) {

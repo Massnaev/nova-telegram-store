@@ -238,3 +238,32 @@ test('заказ с недостаточным остатком отклоняе
   assert.equal(body.error.code, 'INSUFFICIENT_STOCK');
   assert.equal(body.error.details.available, 5);
 });
+
+test('товар из старого заказа полностью удаляется, а история заказа сохраняется', async () => {
+  await fetch(`${baseUrl}/api/admin/products`, {
+    method: 'POST', headers: adminHeaders,
+    body: JSON.stringify({
+      id: 'ordered-product', categoryId: 'devices', name: 'Удаляемый товар', price: 500,
+      variants: [{ id: 'ordered-product-default', name: 'Обычный', stock: 2 }],
+    }),
+  });
+  const orderResponse = await fetch(`${baseUrl}/api/orders`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      items: [{ productId: 'ordered-product', variantId: 'ordered-product-default', quantity: 1 }],
+    }),
+  });
+  const order = (await orderResponse.json()).data;
+
+  const deleteResponse = await fetch(`${baseUrl}/api/admin/products/ordered-product`, {
+    method: 'DELETE', headers: adminHeaders,
+  });
+  assert.equal(deleteResponse.status, 204);
+
+  const products = await fetch(`${baseUrl}/api/admin/products`, { headers: adminHeaders }).then((response) => response.json());
+  assert.equal(products.data.some((product) => product.id === 'ordered-product'), false);
+
+  const savedOrder = await fetch(`${baseUrl}/api/admin/orders/${order.id}`, { headers: adminHeaders }).then((response) => response.json());
+  assert.equal(savedOrder.data.items[0].productName, 'Удаляемый товар');
+});

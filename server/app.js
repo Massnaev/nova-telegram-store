@@ -304,7 +304,17 @@ export function createApp({
     response.json({ data: admin.updateProduct(request.params.id, parse(productUpdateSchema, request.body)) });
   });
   app.delete('/api/admin/products/:id', (request, response) => {
-    admin.deleteProduct(request.params.id);
+    const { imageUrl } = admin.deleteProduct(request.params.id);
+    if (imageUrl?.startsWith('/uploads/products/')) {
+      const { count } = db.prepare('SELECT COUNT(*) AS count FROM products WHERE image_url = ?').get(imageUrl);
+      if (count === 0) {
+        try {
+          images.remove(imageUrl);
+        } catch (error) {
+          console.error('Не удалось удалить фотографию удалённого товара:', error);
+        }
+      }
+    }
     response.status(204).end();
   });
 
