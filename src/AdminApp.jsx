@@ -34,6 +34,8 @@ const emptyProduct = {
   tone: 'blue', sortOrder: 0, active: true, variants: [emptyVariant()],
 };
 
+const integerValue = (value) => value === '' ? 0 : Number(value);
+
 async function api(path, token, options = {}) {
   const response = await fetch(`/api${path}`, {
     ...options,
@@ -103,11 +105,14 @@ function CategoryForm({ initial, busy, onSave, onClose }) {
   const [form, setForm] = useState(() => initial ? { ...initial } : { ...emptyCategory });
   return (
     <Sheet title={initial ? 'Редактировать категорию' : 'Новая категория'} subtitle="Раздел каталога" onClose={onClose}>
-      <form className="admin-form" onSubmit={(e) => { e.preventDefault(); onSave(form); }}>
+      <form className="admin-form" onSubmit={(e) => {
+        e.preventDefault();
+        onSave({ ...form, sortOrder: integerValue(form.sortOrder) });
+      }}>
         <Field label="Название категории *"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Например: Жидкости" required /></Field>
         <Field label="Подпись"><input value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} placeholder="Например: Солевые и органические" /></Field>
         <div className="admin-form-grid">
-          <Field label="Порядок сортировки"><input type="number" min="0" inputMode="numeric" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })} /></Field>
+          <Field label="Порядок сортировки"><input type="number" min="0" step="1" inputMode="numeric" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })} /></Field>
           <Field label="Цвет акцента"><select value={form.tone} onChange={(e) => setForm({ ...form, tone: e.target.value })}><option value="blue">Синий</option><option value="orange">Оранжевый</option><option value="mint">Мятный</option><option value="violet">Фиолетовый</option><option value="rose">Розовый</option></select></Field>
         </div>
         <label className="admin-switch"><input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /><span /><b>Категория видна покупателям</b></label>
@@ -169,7 +174,18 @@ function ProductForm({ initial, categories, busy, onSave, onClose }) {
 
   return (
     <Sheet title={initial ? 'Редактировать товар' : 'Новый товар'} subtitle="Карточка товара" onClose={onClose}>
-      <form className="admin-form" onSubmit={(event) => { event.preventDefault(); onSave({ ...form, imageFile, removeImage, deletedVariantIds }); }}>
+      <form className="admin-form" onSubmit={(event) => {
+        event.preventDefault();
+        onSave({
+          ...form,
+          price: integerValue(form.price),
+          sortOrder: integerValue(form.sortOrder),
+          variants: form.variants.map((variant) => ({ ...variant, stock: integerValue(variant.stock) })),
+          imageFile,
+          removeImage,
+          deletedVariantIds,
+        });
+      }}>
         <Field label="Категория *"><select value={form.categoryId} onChange={(event) => setForm({ ...form, categoryId: event.target.value })} required>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></Field>
         <Field label="Название *"><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></Field>
         <Field label="Короткая подпись"><input value={form.caption} onChange={(event) => setForm({ ...form, caption: event.target.value })} placeholder="Показывается в карточке" /></Field>
@@ -190,8 +206,8 @@ function ProductForm({ initial, categories, busy, onSave, onClose }) {
           {imageError && <div className="admin-image-error" role="alert">{imageError}</div>}
         </div>
         <div className="admin-form-grid">
-          <Field label="Цена, ₽ *"><input type="number" min="0" inputMode="numeric" value={form.price} onChange={(event) => setForm({ ...form, price: Number(event.target.value) })} required /></Field>
-          <Field label="Порядок"><input type="number" min="0" inputMode="numeric" value={form.sortOrder} onChange={(event) => setForm({ ...form, sortOrder: Number(event.target.value) })} /></Field>
+          <Field label="Цена, ₽ *"><input type="number" min="0" step="1" inputMode="numeric" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} required /></Field>
+          <Field label="Порядок"><input type="number" min="0" step="1" inputMode="numeric" value={form.sortOrder} onChange={(event) => setForm({ ...form, sortOrder: event.target.value })} /></Field>
         </div>
         <Field label="Цвет карточки"><select value={form.tone} onChange={(event) => setForm({ ...form, tone: event.target.value })}><option value="blue">Синий</option><option value="orange">Оранжевый</option><option value="mint">Мятный</option><option value="violet">Фиолетовый</option><option value="rose">Розовый</option></select></Field>
         <label className="admin-switch"><input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} /><span /><b>Товар виден покупателям</b></label>
@@ -204,7 +220,7 @@ function ProductForm({ initial, categories, busy, onSave, onClose }) {
               <Field label="Название вкуса/варианта *"><input value={variant.name} onChange={(event) => updateVariant(index, { name: event.target.value })} placeholder="Например: Манго со льдом" required /></Field>
               <div className="admin-form-grid">
                 <Field label="Код"><input value={variant.slug} onChange={(event) => updateVariant(index, { slug: event.target.value })} placeholder="Создастся сам" disabled={Boolean(variant.id)} /></Field>
-                <Field label="Остаток (шт.)"><input type="number" min="0" inputMode="numeric" value={variant.stock} onChange={(event) => updateVariant(index, { stock: Number(event.target.value) })} /></Field>
+                <Field label="Остаток (шт.)"><input type="number" min="0" step="1" inputMode="numeric" value={variant.stock} onChange={(event) => updateVariant(index, { stock: event.target.value })} /></Field>
               </div>
               <label className="admin-switch compact"><input type="checkbox" checked={variant.active} onChange={(event) => updateVariant(index, { active: event.target.checked })} /><span /><b>Доступен для заказа</b></label>
               {form.variants.length > 1 && <button className="admin-remove-variant" type="button" onClick={() => removeVariant(index)}><Trash2 size={16} /> Удалить вариант</button>}
